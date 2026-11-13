@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { installFastBridge, isGptModel } from '../src/fast-mode/bridge.js'
 import type { FastRequest } from '../src/fast-mode/bridge.js'
-import { createFastController } from '../src/fast-mode/controller.js'
+import { createFastController, FAST_CHANNEL } from '../src/fast-mode/controller.js'
 
 type TestSnapshot = { models: { streamSimple: (model: unknown, context: unknown, options?: Record<string, unknown>) => Promise<unknown> } }
 type TestAdapterSurface = {
@@ -102,6 +102,10 @@ describe('Fast adapter bridge', () => {
 })
 
 describe('Fast session controller', () => {
+  it('uses a Host-valid single-segment Connection channel', () => {
+    expect(FAST_CHANNEL).toMatch(/^\/[A-Za-z0-9._~-]+$/)
+  })
+
   it('keeps Fast state per session and pauses it outside the supported GPT route', async () => {
     const session = {}
     let selection = { provider: 'magpie-responses', model: 'mca-gpt/gpt-6.1-sol' }

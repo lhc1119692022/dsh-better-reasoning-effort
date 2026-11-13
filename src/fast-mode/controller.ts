@@ -1,6 +1,7 @@
+import { FAST_CHANNEL } from '../constants.js'
 import { isGptModel, type FastCapability } from './bridge.js'
 
-export const FAST_CHANNEL = '/dsh-better-reasoning-effort/fast'
+export { FAST_CHANNEL }
 export const FAST_ENDPOINT = 'state'
 const FAST_PROVIDER = 'magpie-responses'
 const CACHE_MS = 3_000

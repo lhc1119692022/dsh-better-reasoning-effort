@@ -1,5 +1,6 @@
 import { createElement, useMemo, useSyncExternalStore } from 'react'
 import type { ReactElement } from 'react'
+import { FAST_CHANNEL } from '../constants.js'
 
 type FastStatus = {
   enabled: boolean
@@ -41,7 +42,7 @@ function createStateSource(connection: FastConnection, sessionId: string) {
     if (changing) publish({ ...snapshot, pending: true, error: null })
     try {
       const signal = AbortSignal.any([request.signal, AbortSignal.timeout(10_000)])
-      const result = await connection.rpc.call('/dsh-better-reasoning-effort/fast', 'state',
+      const result = await connection.rpc.call(FAST_CHANNEL, 'state',
         { sessionId, ...(changing ? { enabled } : {}) }, signal) as StateResult
       if (ticket !== sequence) return
       if (!result?.ok) throw new Error(result?.error?.message ?? 'Fast state unavailable')

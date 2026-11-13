@@ -7,6 +7,9 @@
 /** Stable plugin id, matching the cordis.patch.yml row and the bundle id. */
 export const PLUGIN_ID = 'dsh-better-reasoning-effort'
 
+/** Same-origin Host Connection channel used by the Fast state RPC. */
+export const FAST_CHANNEL = '/dsh-better-reasoning-effort-fast'
+
 /** Same-origin host route that proxies a provider's RAW /models listing. */
 export const PROBE_PATH = '/dsh-better-reasoning-effort/raw-models'
 
