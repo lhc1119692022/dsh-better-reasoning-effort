@@ -39,6 +39,7 @@ The `llm-pi-ai` adapter natively supports per-model `reasoningEfforts` and `inpu
 - **Composer slider** — the official model menu's body is replaced by an upstream-style effort slider (drag / keyboard, optimistic commit with rollback), with one model row opening the official model list; the official trigger stays untouched, and model switches keep your level through a per-session memory chain (issue #4's per-model default effort outranks it across sessions).
 - **Per-model default effort** — a "Default effort" picker on each model row, stored in the settings document; every new session starts the model there.
 - **Request headers & `user-agent`** — a provider-card section edits the official `headers` field (masked, path-merged, Save-gated), and the plugin performs the `user-agent` override at the fetch layer per origin, because the official adapter reserves that name; same-origin `/models` probes are covered, conflicts are reported rather than guessed.
+- **Session Fast toggle** — a composer control appears only for GPT model IDs; on the supported Magpie Responses route it asks subsequent requests in that session for `service_tier: "priority"`. This may incur extra charges and does not guarantee faster responses.
 - **Defensive injection** — everything keys off the official page's DOM; if an official upgrade changes the structure, injection simply pauses and the official page is unaffected.
 - Bilingual copy (中文 / English).
 
@@ -94,6 +95,7 @@ Restart `dsh web` and hard-refresh the browser.
    - Any change is **pending** and lands when you press the card's own **Save**; **Cancel** (or a reload) discards it with the card's fields.
 3. On a compatible protocol, the *Endpoint compatibility* section appears at the bottom — thinking budget field / vLLM priority on `openai-completions`, `max_output_tokens` handling on `openai-responses`.
 4. All levels off + Save = unset the declaration; only `off` checked + Save = disable reasoning (`false`); *Clear declaration* + Save = back to inheriting the provider default.
+5. The **Fast** composer toggle is shown for GPT model IDs. Enable it per session to request `service_tier: "priority"` on later GPT calls through the Magpie `openai-responses` route. It is available only with `@deepseek-ai/dsh-llm-pi-ai` `0.2.2-rc.3`; other versions leave Fast unavailable without affecting the plugin's existing features. Priority routing may cost more; actual speed depends on the provider.
 
 Declared models are immediately selectable for reasoning effort in the composer, and image-declared models accept attachments end to end.
 

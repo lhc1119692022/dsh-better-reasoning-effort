@@ -34,6 +34,9 @@ import { detectHeaderConflicts, type HeaderConflictReport } from './headers-conf
 // builds the SAME patch from its own idle-time read, so one suggestion can
 // never produce two different documents.
 import { buildAutofillPatch, stripNewCompatKeysDeep } from './autofill.js'
+import { installFastBridge } from './fast-mode/bridge.js'
+import { createFastController, FAST_CHANNEL } from './fast-mode/controller.js'
+import type { FastContext } from './fast-mode/controller.js'
 
 /** Re-exported so the package entry keeps naming the patch builder. */
 export { buildAutofillPatch }
@@ -576,6 +579,45 @@ export function apply(ctx: Context, config: Config = {}): void {
       }, 'dsh-better-reasoning-effort: default-guard')
     })
   }
+
+  // Optional GPT Fast bridge. It remains isolated from the plugin's existing
+  // settings/guard features and only targets the known Magpie Responses route.
+  ctx.inject(['connection', 'agents', 'sessionProjections', 'agentDefaultModel', 'llm'], (injected) => {
+    const candidate = injected as unknown as Partial<FastContext>
+    if (!candidate.connection?.rpc?.handle || !candidate.agents?.get || !candidate.sessionProjections?.snapshot
+      || !candidate.agentDefaultModel?.currentSelection || !candidate.llm?.prepareCall) return
+    const host = candidate as FastContext
+    let bridge: ReturnType<typeof installFastBridge> | undefined
+    let active = true
+    const controller = createFastController(host, resolve => bridge?.probe(resolve)
+      ?? Promise.resolve({ supported: false, api: null }))
+    let disposeRpc: unknown
+    try {
+      disposeRpc = host.connection.rpc.handle(FAST_CHANNEL, controller.handle)
+    } catch (error) {
+      console.warn(`[${PLUGIN_ID}] Fast RPC unavailable: ${error instanceof Error ? error.message : String(error)}`)
+      return
+    }
+    void Promise.all([
+      import('@deepseek-ai/dsh-llm-pi-ai'),
+      import('@deepseek-ai/dsh-llm-pi-ai/package.json', { with: { type: 'json' } }),
+    ]).then(([adapter, packageJson]) => {
+      if (!active) return
+      const version = packageJson.default.version
+      if (version !== '0.2.2-rc.3') {
+        console.warn(`[${PLUGIN_ID}] Fast bridge requires @deepseek-ai/dsh-llm-pi-ai 0.2.2-rc.3; found ${version}`)
+        return
+      }
+      bridge = installFastBridge(adapter.PiAiAdapter, { isEnabled: controller.isEnabled })
+    }).catch((error: unknown) => {
+      if (active) console.warn(`[${PLUGIN_ID}] Fast bridge unavailable: ${error instanceof Error ? error.message : String(error)}`)
+    })
+    ctx.effect(() => () => {
+      active = false
+      bridge?.dispose()
+      if (typeof disposeRpc === 'function') (disposeRpc as () => void)()
+    }, 'dsh-better-reasoning-effort: Fast bridge')
+  })
 
   // user-agent takeover (issue #12): the official adapter drops a profile
   // `user-agent` and merges the harness attribution over the route's own

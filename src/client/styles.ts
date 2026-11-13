@@ -804,4 +804,39 @@ body:not([data-ds-dark-theme]) .bre-effort.is-dragging .bre-effort-knob {
 .bre-headers .bre-effort-note.bre-warn { color: var(--dsw-alias-state-warn-label, #dd8629); }
 .bre-headers .bre-effort-message.bre-success { color: var(--dsw-alias-state-success-primary, #22c55e); }
 .bre-headers .bre-effort-message.bre-error { color: var(--dsw-alias-state-error-primary, #ec1313); }
+
+/* Compact composer control, styled like a native DSH mode toggle. */
+.bre-fast-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 3px 8px;
+  border: 1px solid var(--dsw-alias-border-l3, #0000001f);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.bre-fast-button:hover:not(:disabled) { background: var(--dsw-alias-bg-layer-2); }
+.bre-fast-button[data-active=true] {
+  color: var(--dsw-alias-brand-primary);
+  border-color: var(--dsw-alias-brand-primary);
+  background: color-mix(in srgb, var(--dsw-alias-brand-primary) 10%, transparent);
+}
+.bre-fast-button:disabled { opacity: .45; cursor: not-allowed; }
+.bre-fast-button:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: 2px;
+}
+.bre-fast-status {
+  align-self: center;
+  color: var(--dsw-alias-label-tertiary, #81858c);
+  font-size: 11px;
+  line-height: 16px;
+}
 `

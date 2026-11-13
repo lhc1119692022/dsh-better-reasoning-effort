@@ -39,6 +39,7 @@
 - **Composer 思考强度滑块** — 官方模型菜单的弹出体被替换为上游风格的档位滑块（拖动 / 键盘，乐观提交、被拒回滚），附一行模型条目打开官方模型列表；右下角触发钮保持原样。切换模型会通过会话记忆链沿用你的档位（issue #4 的每模型默认档跨会话优先）。
 - **每模型默认思考强度** — 模型行上的「默认思考强度」选择器，存在设置文档里，每个新会话打开该模型即用它。
 - **请求头与 User-Agent** — 提供商卡片内编辑官方的 `headers` 字段（掩码显示、路径合并、随卡片保存），并在 fetch 层按 origin 精确接管 `user-agent` 的覆盖（官方适配器保留该名称）；同源 `/models` 探测一并覆盖，冲突时提示而不猜。
+- **会话 Fast 开关** — 仅在 GPT 模型 ID 下显示 Composer 控件；支持的 Magpie Responses 路由中，为本会话后续请求添加 `service_tier: "priority"`。可能产生额外费用，也不保证响应更快。
 - **防御式注入** — 一切锚定官方页 DOM；官方升级改变结构时注入自动暂停，官方页不受影响。
 - 双语文案（中文 / English）。
 
@@ -94,6 +95,7 @@ dsh plugin --profile web add link:D:/Project/dsh-better-reasoning-effort
    - 改动**即时进入待写入**，点卡片自身的**「保存」**时一并落盘；**「取消」**（或刷新）则与卡片字段一起丢弃。
 3. 协议兼容时，底部会出现「端点兼容」分区——`openai-completions` 上设思考预算字段 / vLLM 优先级，`openai-responses` 上设 `max_output_tokens` 的处理方式。
 4. 全不勾 + 保存 = 取消声明（回到继承）；只勾 off + 保存 = 禁用推理（`false`）；模态行「清除声明」+ 保存 = 回到继承提供方默认。
+5. GPT 模型 ID 下会显示 Composer **Fast** 开关。启用后，本会话后续经 Magpie `openai-responses` 路由的 GPT 调用会请求 `service_tier: "priority"`。此能力仅在 `@deepseek-ai/dsh-llm-pi-ai` `0.2.2-rc.3` 上启用；其他版本中 Fast 不可用，但不影响本插件原有功能。Priority 路由可能更贵，实际速度取决于服务商。
 
 声明后的模型在 Composer 里立即可选思考强度；声明了图片输入的模型可以端到端传附件。
 
