@@ -18,9 +18,10 @@ const BOLT_PATH = 'm13 2-9 12h7l-1 8 10-12h-7l0-8Z'
 type Props = ModelLabelOwner & {
   sessionId?: string
   resolveBadge: (text: unknown) => string
+  activeTitle?: string
 }
 
-export function FastModelLabel({ sessionId, provider, model, placement, resolveBadge }: Props): ReactNode {
+export function FastModelLabel({ sessionId, provider, model, placement, resolveBadge, activeTitle }: Props): ReactNode {
   const key = fastKey(sessionId ?? '', provider.id, model.id)
   const subscribe = useCallback((listener: () => void) => subscribeFast(key, listener), [key])
   const snapshot = useCallback(() => fastSnapshot(key), [key])
@@ -47,7 +48,7 @@ export function FastModelLabel({ sessionId, provider, model, placement, resolveB
       className: 'bre-fast-model-bolt', viewBox: '0 0 24 24', fill: 'none',
       stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round',
       strokeLinejoin: 'round', 'aria-hidden': true,
-    }, createElement('path', { d: BOLT_PATH }))
+    }, activeTitle === undefined ? null : createElement('title', null, activeTitle), createElement('path', { d: BOLT_PATH }))
     : null
   return createElement('span', { className: 'bre-fast-model-label' },
     bolt,
@@ -58,7 +59,7 @@ export function FastModelLabel({ sessionId, provider, model, placement, resolveB
 }
 
 /** Own the official per-session slot; never modify the native trigger DOM. */
-export function registerFastModelLabel(ctx: ClientContext): () => void {
+export function registerFastModelLabel(ctx: ClientContext, t: (key: string) => string): () => void {
   const slots = (ctx as unknown as { slots?: SlotRegistrarFace }).slots
   const locale = ctx.locale as typeof ctx.locale & {
     resolveText?: (text: unknown) => string
@@ -69,6 +70,7 @@ export function registerFastModelLabel(ctx: ClientContext): () => void {
       id: `${PLUGIN_ID}-fast-model-label`,
       inject: (sessionId?: string) => ({
         sessionId,
+        activeTitle: t('fastActiveTitle'),
         resolveBadge: (text: NonNullable<ModelLabelOwner['model']['badge']>['text']) =>
           locale.resolveText?.(text) ?? (typeof text === 'string' ? text : ''),
       }),

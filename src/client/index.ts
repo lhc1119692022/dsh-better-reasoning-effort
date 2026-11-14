@@ -87,7 +87,6 @@ export function apply(ctx: ClientContext): void {
   style.textContent = STYLES
   document.head.appendChild(style)
   ctx.effect(() => () => style.remove(), 'dsh-better-reasoning-effort: stylesheet')
-  ctx.effect(() => registerFastModelLabel(ctx), 'dsh-better-reasoning-effort: Fast model label')
 
   // The kernel mounts the settings Remote as an injectable
   // 'remote.settings' service, declared in the plugin's own inject above — so
@@ -124,6 +123,7 @@ export function apply(ctx: ClientContext): void {
   // The shell's Translate is `(key: string, params?: Record<string, unknown>)`;
   // our components take a string-keyed face, so the bound translator narrows.
   const t = ctx.locale.bind(STORE_NS) as Translate
+  ctx.effect(() => registerFastModelLabel(ctx, t), 'dsh-better-reasoning-effort: Fast model label')
 
   // The locale service is also its own LocaleFace (getSnapshot/subscribe).
   // Without those two members a language switch cannot reach copy

@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
 import { FastModelLabel } from '../src/client/injection/fast-model-label.js'
 import { fastKey, publishFast } from '../src/client/fast-status-store.js'
+import { STYLES } from '../src/client/styles.js'
 
 const provider = { id: 'magpie-responses', name: 'Magpie' }
 const model = { id: 'mc-gpt/gpt-6.1-sol', name: 'GPT-6.1 Sol' }
@@ -13,7 +14,7 @@ async function renderLabel(sessionId: string, placement: 'trigger' | 'menu' | 'o
   const node = document.createElement('div')
   document.body.append(node)
   const root = createRoot(node)
-  root.render(createElement(FastModelLabel, { sessionId, provider, model, placement, selected: true, resolveBadge }))
+  root.render(createElement(FastModelLabel, { sessionId, provider, model, placement, selected: true, resolveBadge, activeTitle: 'Fast 已开启' }))
   await vi.waitFor(() => expect(node.textContent).toContain('GPT-6.1 Sol'))
   return { node, root }
 }
@@ -29,6 +30,7 @@ describe('Fast model-name marker', () => {
       publishFast(key, { active: true, enabled: true, supported: true })
       await vi.waitFor(() => expect(node.querySelector('.bre-fast-model-bolt')).not.toBeNull())
       expect(node.querySelector('path')?.getAttribute('d')).toBe('m13 2-9 12h7l-1 8 10-12h-7l0-8Z')
+      expect(node.querySelector('svg title')?.textContent).toBe('Fast 已开启')
       publishFast(key, { active: false, enabled: false, supported: true })
       await vi.waitFor(() => expect(node.querySelector('.bre-fast-model-bolt')).toBeNull())
       expect(node.textContent).toBe('GPT-6.1 Sol')
@@ -88,6 +90,9 @@ describe('Fast model-name marker', () => {
       resolve({ json: async () => ({ ok: true, value: { active: false, enabled: false, supported: true } }) })
       await vi.waitFor(() => expect(node.querySelector('.bre-fast-model-bolt')).not.toBeNull())
       expect(node.textContent).toBe('NewGPT-6.1 Sol')
+      expect(node.querySelector('.bre-fast-model-badge')?.getAttribute('data-tone')).toBe('brand')
+      expect(STYLES).toContain('[data-tone=brand]')
+      expect(STYLES).toContain('.bre-fast-button[data-active=true] svg { fill: currentColor; }')
     } finally { root.unmount(); vi.unstubAllGlobals() }
   })
 })

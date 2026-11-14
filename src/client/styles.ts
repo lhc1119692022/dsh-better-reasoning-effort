@@ -811,6 +811,10 @@ body:not([data-ds-dark-theme]) .bre-effort.is-dragging .bre-effort-knob {
 .bre-fast-model-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bre-fast-model-bolt { flex: 0 0 14px; width: 14px; height: 14px; color: var(--dsw-static-deepseek-500, #4d70ff); }
 .bre-fast-model-badge { flex: none; padding: 0 4px; border-radius: 3px; font-size: 11px; line-height: 16px; background: var(--dsw-alias-bg-layer-2); }
+.bre-fast-model-badge:is([data-tone=brand], [data-tone=info], [data-tone=blue]) { color: var(--dsw-static-deepseek-500, #4d70ff); background: color-mix(in srgb, currentColor 12%, transparent); }
+.bre-fast-model-badge:is([data-tone=success], [data-tone=green]) { color: var(--dsw-alias-state-success-primary, #22c55e); background: color-mix(in srgb, currentColor 12%, transparent); }
+.bre-fast-model-badge:is([data-tone=warning], [data-tone=warn], [data-tone=yellow]) { color: var(--dsw-alias-state-warn-label, #dd8629); background: color-mix(in srgb, currentColor 12%, transparent); }
+.bre-fast-model-badge:is([data-tone=error], [data-tone=danger], [data-tone=red]) { color: var(--dsw-alias-state-error-primary, #ec1313); background: color-mix(in srgb, currentColor 12%, transparent); }
 
 /* Optional GPT Fast: an icon-only lightning toggle to the right of the effort
    slider, one slider step wide (--bre-fast-slot is set by the slider). It is
@@ -844,13 +848,13 @@ body:not([data-ds-dark-theme]) .bre-effort.is-dragging .bre-effort-knob {
 .bre-fast-button svg { width: 16px; height: 16px; }
 .bre-fast-button:hover:not(:disabled) { background: var(--dsw-alias-bg-layer-2); }
 .bre-fast-button[data-active=true] {
-  /* The brand-primary token is near-black on Desktop; the slider and effort
-     label use the blue DeepSeek palette instead. Leave the bolt unfilled so
-     its outline is the same bright blue in both themes. */
+  /* Desktop's brand-primary is near-black; use the blue effort-label palette
+     for the filled active bolt, matching the slider's blue state. */
   color: var(--dsw-static-deepseek-500, #4d70ff);
   border-color: currentColor;
   background: color-mix(in srgb, currentColor 12%, transparent);
 }
+.bre-fast-button[data-active=true] svg { fill: currentColor; }
 .bre-fast-button:disabled { opacity: .55; cursor: progress; }
 .bre-fast-button:focus-visible {
   outline: 2px solid var(--dsw-alias-brand-primary);
