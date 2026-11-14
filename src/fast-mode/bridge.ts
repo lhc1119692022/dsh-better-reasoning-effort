@@ -1,18 +1,27 @@
-import { AsyncLocalStorage } from 'node:async_hooks'
-const OWNER = Symbol.for('dsh-better-reasoning-effort.fast-bridge')
-const FAST_PROVIDER = 'magpie-responses'
-const FAST_API = 'openai-responses'
+/**
+ * Optional GPT Fast bridge: adds `service_tier: "priority"` to the outgoing
+ * Responses payload of sessions that turned Fast on.
+ *
+ * It wraps the LIVE pi-ai adapter's `streamWithSnapshot` (found from the
+ * adapter instance the Host's `llm` service holds, never from a module copy
+ * this package might resolve on its own), and only ever touches a request when
+ * every gate holds: a main-loop request (no `purpose`), with a session id, on
+ * a GPT model whose configured descriptor speaks `openai-responses`, for a
+ * session whose Fast flag is on. Everything else passes through untouched, and
+ * any failure inside the gate falls back to the original call.
+ *
+ * @module dsh-better-reasoning-effort/fast-mode/bridge
+ */
 
-export interface FastCapability {
-  supported: boolean
-  api: string | null
-}
+const OWNER = Symbol.for('dsh-better-reasoning-effort.fast-bridge')
+/** The only wire protocol whose payload accepts `service_tier`. */
+export const FAST_API = 'openai-responses'
 
 export interface FastRequest {
   provider: string
   model: string
-  sessionId?: string
-  purpose?: string
+  sessionId?: unknown
+  purpose?: unknown
   [key: string]: unknown
 }
 
@@ -24,20 +33,55 @@ interface PiSnapshot {
   models: PiModels
   [key: string]: unknown
 }
+/** The adapter members the bridge relies on (private in TS, present at runtime). */
 interface AdapterSurface {
   current(): PiSnapshot
   modelOf(snapshot: PiSnapshot, provider: string, model: string): ModelDescriptor
-  prepareCall(provider: string, model: string, signal?: AbortSignal): unknown
   streamWithSnapshot(options: FastRequest, snapshot: PiSnapshot): AsyncIterable<unknown>
 }
-interface ProbeState extends FastCapability {}
 
-export function isGptModel(model: unknown): model is string {
-  return typeof model === 'string' && model.toLowerCase().includes('gpt')
+/** Bridge handle. */
+export interface FastBridge {
+  /** The prototype carrying the wrap. */
+  readonly target: object
+  /** Restore the original method (keeps a later wrapper from another plugin). */
+  dispose(): void
 }
 
-function canInject(provider: string, model: ModelDescriptor): boolean {
-  return provider === FAST_PROVIDER && model.api === FAST_API
+/**
+ * Whether a provider-owned model id names a GPT model: the last path segment
+ * starts with `gpt-` (or is exactly `gpt`). `mc-gpt/gpt-6.1-sol` matches,
+ * `yf/deepseek-v4.1-flash` and `mc-gpt/claude-x` do not.
+ */
+export function isGptModel(model: unknown): model is string {
+  if (typeof model !== 'string' || model.length === 0) return false
+  const leaf = model.split('/').at(-1) ?? ''
+  return /^gpt(?:-|$)/i.test(leaf)
+}
+
+/** Whether a configured model descriptor can carry the priority tier. */
+export function descriptorSupportsFast(model: unknown, descriptor: ModelDescriptor | undefined): boolean {
+  return isGptModel(model) && descriptor?.api === FAST_API
+}
+
+/**
+ * The prototype that OWNS the adapter's stream entry, walking up from an
+ * instance. Returns undefined when the instance is not a pi-ai-shaped adapter.
+ */
+export function adapterPrototypeOf(adapter: unknown): object | undefined {
+  if (typeof adapter !== 'object' || adapter === null) return undefined
+  let proto: object | null = Object.getPrototypeOf(adapter) as object | null
+  while (proto !== null && proto !== Object.prototype) {
+    const own = Object.getOwnPropertyDescriptor(proto, 'streamWithSnapshot')
+    if (own !== undefined && typeof own.value === 'function') {
+      const surface = proto as Record<string, unknown>
+      return typeof surface['modelOf'] === 'function' && typeof surface['current'] === 'function'
+        ? proto
+        : undefined
+    }
+    proto = Object.getPrototypeOf(proto) as object | null
+  }
+  return undefined
 }
 
 function withPriority(options: Record<string, unknown> = {}): Record<string, unknown> {
@@ -45,56 +89,52 @@ function withPriority(options: Record<string, unknown> = {}): Record<string, unk
   return {
     ...options,
     serviceTier: 'priority',
-    async onPayload(payload: unknown, model: unknown): Promise<Record<string, unknown>> {
+    async onPayload(payload: unknown, model: unknown): Promise<unknown> {
+      // Respect a callback that returned a new body; undefined keeps the original.
       const transformed = typeof previous === 'function'
         ? await (previous as (payload: unknown, model: unknown) => unknown)(payload, model)
         : undefined
       const body = transformed ?? payload
-      if (typeof body !== 'object' || body === null || Array.isArray(body)) {
-        throw new Error('dsh-better-reasoning-effort: invalid OpenAI payload')
-      }
+      if (typeof body !== 'object' || body === null || Array.isArray(body)) return body
       return { ...(body as Record<string, unknown>), service_tier: 'priority' }
     },
   }
 }
 
-/** Installs a narrow bridge into the verified DSH pi-ai adapter. */
-export function installFastBridge(Adapter: { prototype: object }, options: { isEnabled: (sessionId: string) => boolean }) {
-  const proto = Adapter.prototype as unknown as Record<PropertyKey, unknown>
-  const originalStream = proto['streamWithSnapshot']
-  const originalPrepare = proto['prepareCall']
-  if (typeof originalStream !== 'function' || typeof originalPrepare !== 'function'
-    || typeof proto['modelOf'] !== 'function' || typeof proto['current'] !== 'function') {
-    throw new Error('Incompatible PiAiAdapter Fast bridge contract')
-  }
-  if (proto[OWNER] !== undefined) throw new Error('Fast bridge already installed')
+/**
+ * Wrap one adapter prototype. A wrap left by an earlier load of this plugin
+ * (HMR, disable/enable) is released first, so the process never stacks two.
+ * @param proto - the prototype owning `streamWithSnapshot` ({@link adapterPrototypeOf}).
+ * @param isEnabled - whether a session id has Fast on.
+ */
+export function installFastBridge(proto: object, isEnabled: (sessionId: string) => boolean): FastBridge {
+  const surface = proto as Record<PropertyKey, unknown>
+  const previous = surface[OWNER] as FastBridge | undefined
+  if (previous !== undefined) previous.dispose()
 
-  const probes = new AsyncLocalStorage<ProbeState>()
+  const originalStream = surface['streamWithSnapshot']
+  if (typeof originalStream !== 'function' || typeof surface['modelOf'] !== 'function') {
+    throw new Error('incompatible pi-ai adapter: streamWithSnapshot/modelOf missing')
+  }
+  const original = originalStream as AdapterSurface['streamWithSnapshot']
   let active = true
 
-  const wrappedPrepare = function (this: AdapterSurface, provider: string, model: string, signal?: AbortSignal): unknown {
-    const probe = active ? probes.getStore() : undefined
-    if (probe) {
-      try {
-        const descriptor = this.modelOf(this.current(), provider, model)
-        probe.api = typeof descriptor.api === 'string' ? descriptor.api : null
-        probe.supported = isGptModel(model) && canInject(provider, descriptor)
-      } catch {
-        probe.supported = false
-      }
-    }
-    return (originalPrepare as AdapterSurface['prepareCall']).call(this, provider, model, signal)
+  const shouldInject = (adapter: AdapterSurface, request: FastRequest, snapshot: PiSnapshot): boolean => {
+    if (!active || request.purpose !== undefined || request.sessionId === undefined) return false
+    if (!isGptModel(request.model)) return false
+    if (!isEnabled(String(request.sessionId))) return false
+    return descriptorSupportsFast(request.model, adapter.modelOf(snapshot, request.provider, request.model))
   }
 
-  const wrappedStream = function (this: AdapterSurface, request: FastRequest, snapshot: PiSnapshot): AsyncIterable<unknown> {
-    if (!active || request.purpose || !request.sessionId || !isGptModel(request.model)
-      || request.provider !== FAST_PROVIDER || !options.isEnabled(String(request.sessionId))) {
-      return (originalStream as AdapterSurface['streamWithSnapshot']).call(this, request, snapshot)
+  const wrapped = function (this: AdapterSurface, request: FastRequest, snapshot: PiSnapshot): AsyncIterable<unknown> {
+    let inject = false
+    try {
+      inject = shouldInject(this, request, snapshot)
+    } catch {
+      // Unknown route/model or a shape change: never block the original call.
+      inject = false
     }
-    const descriptor = this.modelOf(snapshot, request.provider, request.model)
-    if (!canInject(request.provider, descriptor)) {
-      return (originalStream as AdapterSurface['streamWithSnapshot']).call(this, request, snapshot)
-    }
+    if (!inject) return original.call(this, request, snapshot)
     const models = new Proxy(snapshot.models, {
       get(target, key) {
         if (key === 'streamSimple') {
@@ -102,32 +142,22 @@ export function installFastBridge(Adapter: { prototype: object }, options: { isE
             target.streamSimple(model, context, withPriority(callOptions))
         }
         const value = Reflect.get(target, key, target) as unknown
-        return typeof value === 'function' ? value.bind(target) : value
+        return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value
       },
     })
-    return (originalStream as AdapterSurface['streamWithSnapshot']).call(this, request, { ...snapshot, models })
+    return original.call(this, request, { ...snapshot, models })
   }
 
-  const marker = {}
-  proto[OWNER] = marker
-  proto['prepareCall'] = wrappedPrepare
-  proto['streamWithSnapshot'] = wrappedStream
-
-  return {
-    async probe(resolve: () => unknown): Promise<FastCapability> {
-      const result: ProbeState = { supported: false, api: null }
-      try {
-        await probes.run(result, resolve)
-      } catch {
-        // The controller returns the safe unavailable state to the client.
-      }
-      return result
-    },
+  const bridge: FastBridge = {
+    target: proto,
     dispose(): void {
+      if (!active) return
       active = false
-      if (proto['streamWithSnapshot'] === wrappedStream) proto['streamWithSnapshot'] = originalStream
-      if (proto['prepareCall'] === wrappedPrepare) proto['prepareCall'] = originalPrepare
-      if (proto[OWNER] === marker) delete proto[OWNER]
+      if (surface['streamWithSnapshot'] === wrapped) surface['streamWithSnapshot'] = original
+      if (surface[OWNER] === bridge) delete surface[OWNER]
     },
   }
+  surface['streamWithSnapshot'] = wrapped
+  surface[OWNER] = bridge
+  return bridge
 }

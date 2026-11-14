@@ -22,7 +22,7 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 // concept, so a typed constant is enough.
 import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import Schema from '@deepseek-ai/schemastery'
-import { AUTOFILL_CONFIG_PATH, HEADERS_CONFIG_PATH, PI_AI_NS, PLUGIN_ID, PROBE_PATH } from './constants.js'
+import { AUTOFILL_CONFIG_PATH, FAST_STATE_PATH, HEADERS_CONFIG_PATH, PI_AI_NS, PLUGIN_ID, PROBE_PATH } from './constants.js'
 import { suggestEfforts } from './knowledge.js'
 import type { ReasoningEfforts } from './knowledge.js'
 import { resolveGuardEffort } from './guard.js'
@@ -34,9 +34,7 @@ import { detectHeaderConflicts, type HeaderConflictReport } from './headers-conf
 // builds the SAME patch from its own idle-time read, so one suggestion can
 // never produce two different documents.
 import { buildAutofillPatch, stripNewCompatKeysDeep } from './autofill.js'
-import { installFastBridge } from './fast-mode/bridge.js'
-import { createFastController, FAST_CHANNEL } from './fast-mode/controller.js'
-import type { FastContext } from './fast-mode/controller.js'
+import { createFastController } from './fast-mode/controller.js'
 
 /** Re-exported so the package entry keeps naming the patch builder. */
 export { buildAutofillPatch }
@@ -186,6 +184,26 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status
   res.setHeader('content-type', 'application/json; charset=utf-8')
   res.end(JSON.stringify(body))
+}
+
+/** Read a request body as UTF-8, rejecting anything over `limit` bytes. */
+function readBoundedBody(req: IncomingMessage, limit: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+    let size = 0
+    req.on('data', (chunk: Buffer | string) => {
+      const buffer = typeof chunk === 'string' ? Buffer.from(chunk) : chunk
+      size += buffer.length
+      if (size > limit) {
+        reject(new Error('body too large'))
+        req.destroy()
+        return
+      }
+      chunks.push(buffer)
+    })
+    req.on('end', () => { resolve(Buffer.concat(chunks).toString('utf8')) })
+    req.on('error', reject)
+  })
 }
 
 /**
@@ -580,44 +598,23 @@ export function apply(ctx: Context, config: Config = {}): void {
     })
   }
 
-  // Optional GPT Fast bridge. It remains isolated from the plugin's existing
-  // settings/guard features and only targets the known Magpie Responses route.
-  ctx.inject(['connection', 'agents', 'sessionProjections', 'agentDefaultModel', 'llm'], (injected) => {
-    const candidate = injected as unknown as Partial<FastContext>
-    if (!candidate.connection?.rpc?.handle || !candidate.agents?.get || !candidate.sessionProjections?.snapshot
-      || !candidate.agentDefaultModel?.currentSelection || !candidate.llm?.prepareCall) return
-    const host = candidate as FastContext
-    let bridge: ReturnType<typeof installFastBridge> | undefined
-    let active = true
-    const controller = createFastController(host, resolve => bridge?.probe(resolve)
-      ?? Promise.resolve({ supported: false, api: null }))
-    let disposeRpc: unknown
-    try {
-      disposeRpc = host.connection.rpc.handle(FAST_CHANNEL, controller.handle)
-    } catch (error) {
-      console.warn(`[${PLUGIN_ID}] Fast RPC unavailable: ${error instanceof Error ? error.message : String(error)}`)
-      return
-    }
-    void Promise.all([
-      import('@deepseek-ai/dsh-llm-pi-ai'),
-      import('@deepseek-ai/dsh-llm-pi-ai/package.json', { with: { type: 'json' } }),
-    ]).then(([adapter, packageJson]) => {
-      if (!active) return
-      const version = packageJson.default.version
-      if (version !== '0.2.2-rc.3') {
-        console.warn(`[${PLUGIN_ID}] Fast bridge requires @deepseek-ai/dsh-llm-pi-ai 0.2.2-rc.3; found ${version}`)
-        return
+  // Optional GPT Fast (session-scoped `service_tier: "priority"`). Isolated
+  // from every reasoning-effort feature: it depends on no injected service
+  // (the `llm` service is read lazily per request), registers one exact route
+  // below beside the plugin's other routes, and its bridge only wraps the live
+  // pi-ai adapter once a supported route is first queried. Any failure leaves
+  // the request path untouched.
+  const fastController = createFastController(
+    () => {
+      try {
+        return ctx.get('llm')
+      } catch {
+        return undefined
       }
-      bridge = installFastBridge(adapter.PiAiAdapter, { isEnabled: controller.isEnabled })
-    }).catch((error: unknown) => {
-      if (active) console.warn(`[${PLUGIN_ID}] Fast bridge unavailable: ${error instanceof Error ? error.message : String(error)}`)
-    })
-    ctx.effect(() => () => {
-      active = false
-      bridge?.dispose()
-      if (typeof disposeRpc === 'function') (disposeRpc as () => void)()
-    }, 'dsh-better-reasoning-effort: Fast bridge')
-  })
+    },
+    message => { console.warn(`[${PLUGIN_ID}] ${message}`) },
+  )
+  ctx.effect(() => () => { fastController.dispose() }, 'dsh-better-reasoning-effort: Fast bridge')
 
   // user-agent takeover (issue #12): the official adapter drops a profile
   // `user-agent` and merges the harness attribution over the route's own
@@ -809,6 +806,38 @@ export function apply(ctx: Context, config: Config = {}): void {
           },
         }),
       'dsh-better-reasoning-effort: autofill config route',
+    )
+
+    // The optional GPT Fast toggle's state. POST only (it carries the write),
+    // same-origin fence like the others, bounded JSON body. The controller
+    // never throws and never echoes adapter errors back.
+    ctx.effect(
+      () =>
+        webServerCtx.webServer.register({
+          kind: 'exact',
+          path: FAST_STATE_PATH,
+          handler: async (req, res) => {
+            if (!isTrustedRequest(req)) {
+              sendJson(res, 403, { ok: false, error: 'forbidden' })
+              return
+            }
+            if (req.method !== 'POST') {
+              sendJson(res, 405, { ok: false, error: 'method not allowed' })
+              return
+            }
+            let body: unknown
+            try {
+              body = JSON.parse(await readBoundedBody(req, 4096))
+            } catch {
+              sendJson(res, 400, { ok: false, error: { code: 'INVALID_ARGUMENT' } })
+              return
+            }
+            const result = fastController.handle(body)
+            res.setHeader('cache-control', 'no-store')
+            sendJson(res, result.ok ? 200 : 400, result)
+          },
+        }),
+      'dsh-better-reasoning-effort: Fast state route',
     )
 
     // The request-header overlay's status, for the browser half. Same-origin

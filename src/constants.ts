@@ -7,8 +7,12 @@
 /** Stable plugin id, matching the cordis.patch.yml row and the bundle id. */
 export const PLUGIN_ID = 'dsh-better-reasoning-effort'
 
-/** Same-origin Host Connection channel used by the Fast state RPC. */
-export const FAST_CHANNEL = '/dsh-better-reasoning-effort-fast'
+/**
+ * Same-origin host route for the optional GPT Fast toggle: reads and writes the
+ * session's Fast flag. An exact webServer route like the three below, so it
+ * rides the same proven registration path as the plugin's other host routes.
+ */
+export const FAST_STATE_PATH = '/dsh-better-reasoning-effort/fast-state'
 
 /** Same-origin host route that proxies a provider's RAW /models listing. */
 export const PROBE_PATH = '/dsh-better-reasoning-effort/raw-models'

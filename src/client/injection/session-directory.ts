@@ -92,6 +92,8 @@ export interface SessionDirectoryDeps {
 export interface SessionDirectoryTracker {
   /** Resolve (and wire) the current session's directory; undefined in the boot window. */
   ensure: () => ModelDirectoryLike | undefined
+  /** The session id the last successful {@link ensure} resolved. */
+  sessionId: () => string | undefined
   /** Restore every wrapped directory's original select; the fiber is going away. */
   dispose: () => void
 }
@@ -182,5 +184,5 @@ export function createSessionDirectoryTracker(deps: SessionDirectoryDeps): Sessi
     wiredDirectories.clear()
   }
 
-  return { ensure, dispose }
+  return { ensure, sessionId: () => current?.sessionId, dispose }
 }

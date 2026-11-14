@@ -805,38 +805,46 @@ body:not([data-ds-dark-theme]) .bre-effort.is-dragging .bre-effort-knob {
 .bre-headers .bre-effort-message.bre-success { color: var(--dsw-alias-state-success-primary, #22c55e); }
 .bre-headers .bre-effort-message.bre-error { color: var(--dsw-alias-state-error-primary, #ec1313); }
 
-/* Compact composer control, styled like a native DSH mode toggle. */
+/* Optional GPT Fast: an icon-only lightning toggle to the right of the effort
+   slider, one slider step wide (--bre-fast-slot is set by the slider). It is
+   absent unless the Host confirms the current GPT route supports it, so the
+   slider keeps its full width otherwise. */
+.bre-effort-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.bre-effort-row > .bre-effort {
+  flex: 1 1 auto;
+  width: auto;
+}
 .bre-fast-button {
+  flex: 0 0 var(--bre-fast-slot, 44px);
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  min-height: 28px;
-  padding: 3px 8px;
+  justify-content: center;
+  height: 30px;
+  min-width: 30px;
+  padding: 0;
   border: 1px solid var(--dsw-alias-border-l3, #0000001f);
-  border-radius: 7px;
+  border-radius: 999px;
   background: transparent;
   color: var(--dsw-alias-label-secondary);
-  font: inherit;
-  font-size: 12px;
-  white-space: nowrap;
   cursor: pointer;
-  transition: background .15s, color .15s;
+  transition: background .15s, color .15s, border-color .15s;
 }
+.bre-fast-button svg { width: 16px; height: 16px; }
 .bre-fast-button:hover:not(:disabled) { background: var(--dsw-alias-bg-layer-2); }
 .bre-fast-button[data-active=true] {
   color: var(--dsw-alias-brand-primary);
   border-color: var(--dsw-alias-brand-primary);
-  background: color-mix(in srgb, var(--dsw-alias-brand-primary) 10%, transparent);
+  background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent);
 }
-.bre-fast-button:disabled { opacity: .45; cursor: not-allowed; }
+.bre-fast-button[data-active=true] svg { fill: currentColor; }
+.bre-fast-button:disabled { opacity: .55; cursor: progress; }
 .bre-fast-button:focus-visible {
   outline: 2px solid var(--dsw-alias-brand-primary);
   outline-offset: 2px;
-}
-.bre-fast-status {
-  align-self: center;
-  color: var(--dsw-alias-label-tertiary, #81858c);
-  font-size: 11px;
-  line-height: 16px;
 }
 `

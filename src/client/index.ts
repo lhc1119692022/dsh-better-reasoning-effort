@@ -58,7 +58,6 @@ import { createSessionDirectoryTracker } from './injection/session-directory.js'
 import { modelMenuOf } from './injection/model-menu.js'
 import { registerProviderCardSlot } from './injection/provider-card-slot.js'
 import { registerSliderToggleSlot } from './injection/slider-toggle-slot.js'
-import { registerFastModeSlot } from './fast-mode-slot.js'
 
 /** Stable plugin id, matching the cordis.patch.yml row and the bundle id. */
 export const name = PLUGIN_ID
@@ -155,6 +154,7 @@ export function apply(ctx: ClientContext): void {
     refreshed,
     sliderEnabled,
     directory: sessionDirectory.ensure,
+    sessionId: sessionDirectory.sessionId,
   })
   // The running auto-fill complement (issue #7): the host fills once at boot,
   // everything a session adds afterwards is filled on the idle pass.
@@ -237,7 +237,6 @@ export function apply(ctx: ClientContext): void {
   }, 'dsh-better-reasoning-effort: slider preference')
 
   ctx.effect(() => registerSliderToggleSlot(ctx, t), 'dsh-better-reasoning-effort: footer slot activation')
-  ctx.effect(() => registerFastModeSlot(ctx, t), 'dsh-better-reasoning-effort: Fast composer slot')
 
   // The request-header editor (issue #12) takes the OFFICIAL provider-card seat:
   // keyed by the adapter family's settings namespace, it receives every

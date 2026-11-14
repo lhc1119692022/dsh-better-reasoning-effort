@@ -22,6 +22,7 @@
 import { createElement, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 import { selectRefusalMessage } from './effort-memory.js'
+import { FastButton } from './FastButton.js'
 import type {
   DirectoryCurrentLike,
   DirectoryGroupLike,
@@ -71,6 +72,8 @@ export interface ComposerSliderProps {
   t: (key: string, params?: Record<string, string | number>) => string
   /** Open the official model list (upstream's row function); injected by the mount. */
   pickModel?: () => void
+  /** The current session id, for the optional GPT Fast toggle beside the slider. */
+  sessionId?: string
 }
 
 interface RadiationState {
@@ -554,6 +557,13 @@ export function ComposerSlider(props: ComposerSliderProps): ReactNode {
       { className: 'bre-slider-advanced' },
       createElement(
         'div',
+        {
+          className: 'bre-effort-row',
+          // One slider step wide: the toggle takes the slot a further level would.
+          style: { '--bre-fast-slot': `calc((100% - 8px) / ${String(count)})` } as CSSProperties,
+        },
+      createElement(
+        'div',
         { className: 'bre-effort' + (dragging ? ' is-dragging' : '') + (busy ? ' is-busy' : '') + (error === null ? '' : ' is-error'), title },
         createElement(
           'div',
@@ -601,6 +611,16 @@ export function ComposerSlider(props: ComposerSliderProps): ReactNode {
         error === null
           ? null
           : createElement('span', { className: 'bre-effort-sr', role: 'status' }, error),
+      ),
+      props.sessionId === undefined || current === null
+        ? null
+        : createElement(FastButton, {
+          key: `${props.sessionId}\u0000${current.provider}\u0000${current.model}`,
+          sessionId: props.sessionId,
+          provider: current.provider,
+          model: current.model,
+          t,
+        }),
       ),
     ),
     createElement('div', { className: 'bre-menu-separator', 'aria-hidden': true }),

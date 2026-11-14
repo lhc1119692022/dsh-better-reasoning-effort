@@ -33,6 +33,8 @@ export interface ComposerMenuDeps {
   sliderEnabled: () => boolean
   /** The current session's model directory, or undefined in the boot window. */
   directory: () => ModelDirectoryLike | undefined
+  /** The session id behind {@link directory} (feeds the optional GPT Fast toggle). */
+  sessionId?: () => string | undefined
 }
 
 /** The composer injection's face: one reconcile per scan, one dispose per fiber. */
@@ -132,6 +134,7 @@ export function createComposerMenu(deps: ComposerMenuDeps): ComposerMenuInjectio
           fallbackText: t('renderFailed'),
           children: refreshed(() => createElement(ComposerSlider, {
             directory: resolved,
+            sessionId: deps.sessionId?.(),
             t,
             // Our model row replicates upstream's: clicking it opens the
             // OFFICIAL model list. The official cells are the menu's DIRECT

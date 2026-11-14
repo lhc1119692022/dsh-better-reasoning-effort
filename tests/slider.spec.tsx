@@ -254,3 +254,75 @@ describe('ComposerSlider commit', () => {
     root.unmount()
   })
 })
+
+describe('GPT Fast toggle beside the slider', () => {
+  async function mountWithSession(directory: ModelDirectoryLike, sessionId?: string) {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    root.render(createElement(ComposerSlider, { directory, t: (key: string) => key, ...(sessionId === undefined ? {} : { sessionId }) }))
+    await new Promise(resolve => setTimeout(resolve, 0))
+    return { root, container }
+  }
+  const gpt = {
+    current: { provider: 'magpie-responses', model: 'mc-gpt/gpt-6.1-sol', reasoningEffort: 'high' },
+    groups: [{ id: 'magpie-responses', name: 'Magpie', models: [{ id: 'mc-gpt/gpt-6.1-sol', name: 'GPT-6.1 Sol', reasoning: { efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }] } }] }],
+  }
+
+  it('renders the bolt only when the host confirms support, and toggles it', async () => {
+    const fetchSpy = vi.fn(async (_url: string, init: { body: string }) => {
+      const body = JSON.parse(init.body) as { enabled?: boolean }
+      const enabled = body.enabled === true
+      return { json: async () => ({ ok: true, value: { enabled, supported: true, active: enabled } }) }
+    })
+    vi.stubGlobal('fetch', fetchSpy)
+    try {
+      const { directory } = fixture(gpt)
+      const { root, container } = await mountWithSession(directory, 'session-a')
+      const button = await vi.waitFor(() => {
+        const found = container.querySelector<HTMLButtonElement>('.bre-effort-row > .bre-fast-button')
+        expect(found).not.toBeNull()
+        return found!
+      })
+      expect(button.querySelector('path')?.getAttribute('d')).toBe('m13 2-9 12h7l-1 8 10-12h-7l0-8Z')
+      expect(button.getAttribute('aria-pressed')).toBe('false')
+      expect(JSON.parse((fetchSpy.mock.calls[0]![1]).body)).toEqual({ sessionId: 'session-a', provider: 'magpie-responses', model: 'mc-gpt/gpt-6.1-sol' })
+      button.click()
+      await vi.waitFor(() => expect(button.getAttribute('aria-pressed')).toBe('true'))
+      expect(JSON.parse((fetchSpy.mock.calls[1]![1]).body)).toMatchObject({ enabled: true })
+      // The slider itself is untouched.
+      expect(container.querySelector('input[type="range"]')).not.toBeNull()
+      root.unmount()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('renders nothing when the host says unsupported, fails, or no session is known', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ json: async () => ({ ok: true, value: { enabled: false, supported: false, active: false } }) })))
+    try {
+      const { directory } = fixture()
+      const unsupported = await mountWithSession(directory, 'session-b')
+      await new Promise(resolve => setTimeout(resolve, 10))
+      expect(unsupported.container.querySelector('.bre-fast-button')).toBeNull()
+      expect(unsupported.container.querySelector('input[type="range"]')).not.toBeNull()
+      unsupported.root.unmount()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline') }))
+    try {
+      const { directory } = fixture(gpt)
+      const failing = await mountWithSession(directory, 'session-c')
+      await new Promise(resolve => setTimeout(resolve, 10))
+      expect(failing.container.querySelector('.bre-fast-button')).toBeNull()
+      expect(failing.container.querySelector('input[type="range"]')).not.toBeNull()
+      failing.root.unmount()
+      const anonymous = await mountWithSession(directory)
+      expect(anonymous.container.querySelector('.bre-fast-button')).toBeNull()
+      anonymous.root.unmount()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
