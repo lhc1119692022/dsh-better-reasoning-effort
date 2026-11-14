@@ -12,6 +12,7 @@
 import { Component, createElement, useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { FAST_STATE_PATH } from '../constants.js'
+import { fastKey, fastSnapshot, publishFast } from './fast-status-store.js'
 
 /** Delthin/dsh-fast's bolt path, verbatim. */
 const BOLT_PATH = 'm13 2-9 12h7l-1 8 10-12h-7l0-8Z'
@@ -23,9 +24,6 @@ export interface FastStatus {
 }
 
 type FastResult = { ok: true; value: FastStatus } | { ok: false; error?: { code?: string } }
-
-/** Last known status per session/route/model: reopening the menu shows the button at once. */
-const statusCache = new Map<string, FastStatus>()
 
 /**
  * POST the Fast state route.
@@ -61,8 +59,8 @@ export interface FastButtonProps {
 }
 
 function FastToggle({ sessionId, provider, model, t }: FastButtonProps): ReactNode {
-  const key = `${sessionId}\u0000${provider}\u0000${model}`
-  const [status, setStatus] = useState<FastStatus | undefined>(() => statusCache.get(key))
+  const key = fastKey(sessionId, provider, model)
+  const [status, setStatus] = useState<FastStatus | undefined>(() => fastSnapshot(key))
   const [pending, setPending] = useState(false)
   const [failed, setFailed] = useState(false)
 
@@ -70,8 +68,7 @@ function FastToggle({ sessionId, provider, model, t }: FastButtonProps): ReactNo
     const controller = new AbortController()
     void requestFastState({ sessionId, provider, model }, controller.signal).then(next => {
       if (controller.signal.aborted) return
-      if (next === undefined) statusCache.delete(key)
-      else statusCache.set(key, next)
+      publishFast(key, next)
       setStatus(next)
     })
     return () => { controller.abort() }
@@ -87,7 +84,7 @@ function FastToggle({ sessionId, provider, model, t }: FastButtonProps): ReactNo
         setFailed(true)
         return
       }
-      statusCache.set(key, next)
+      publishFast(key, next)
       setStatus(next)
     })
   }, [key, pending, status, sessionId, provider, model])

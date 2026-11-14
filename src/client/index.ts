@@ -26,11 +26,13 @@
  *      0.1.6-alpha.1, Model options / 模型选项 from 0.1.6-alpha.2), so the
  *      editor lives under each model row rather than on the provider card.
  *   2. The composer reasoning-effort slider, mounted inside the OFFICIAL model
- *      menu opened from the bottom-right seat. The seat's trigger is never
- *      touched — the official "model · effort" display stays.
+ *      menu opened from the bottom-right seat. The seat's native trigger and
+ *      click behavior remain owned by the host; its label slot may show the
+ *      active Fast bolt beside the existing model name.
  *   3. The Models-page slider toggle, taking the official
  *      'settings.models.footer' slot unconditionally at apply.
- *   4. The stylesheet and copy dictionaries.
+ *   4. An active Fast marker in the official per-session model-label slot.
+ *   5. The stylesheet and copy dictionaries.
  *
  * @module dsh-better-reasoning-effort/client
  */
@@ -55,6 +57,7 @@ import { createConfiguredEfforts } from './injection/configured-efforts.js'
 import { createIdleAutofill } from './injection/autofill-run.js'
 import { createModelsPage } from './injection/models-page.js'
 import { createSessionDirectoryTracker } from './injection/session-directory.js'
+import { registerFastModelLabel } from './injection/fast-model-label.js'
 import { modelMenuOf } from './injection/model-menu.js'
 import { registerProviderCardSlot } from './injection/provider-card-slot.js'
 import { registerSliderToggleSlot } from './injection/slider-toggle-slot.js'
@@ -84,6 +87,7 @@ export function apply(ctx: ClientContext): void {
   style.textContent = STYLES
   document.head.appendChild(style)
   ctx.effect(() => () => style.remove(), 'dsh-better-reasoning-effort: stylesheet')
+  ctx.effect(() => registerFastModelLabel(ctx), 'dsh-better-reasoning-effort: Fast model label')
 
   // The kernel mounts the settings Remote as an injectable
   // 'remote.settings' service, declared in the plugin's own inject above — so

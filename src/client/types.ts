@@ -176,7 +176,7 @@ export interface SlotRegistrarFace {
     key?: string
     id?: string
     order?: number
-    inject?: () => Record<string, unknown>
+    inject?: (sessionId?: string) => Record<string, unknown>
     [extra: string]: unknown
   }, component: unknown): () => void
 }

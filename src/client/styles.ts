@@ -805,6 +805,13 @@ body:not([data-ds-dark-theme]) .bre-effort.is-dragging .bre-effort-knob {
 .bre-headers .bre-effort-message.bre-success { color: var(--dsw-alias-state-success-primary, #22c55e); }
 .bre-headers .bre-effort-message.bre-error { color: var(--dsw-alias-state-error-primary, #ec1313); }
 
+/* Fast marker occupies the official inline model-label slot; the original
+   model name and optional badge remain visible in every placement. */
+.bre-fast-model-label { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; vertical-align: middle; }
+.bre-fast-model-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bre-fast-model-bolt { flex: 0 0 14px; width: 14px; height: 14px; color: var(--dsw-static-deepseek-500, #4d70ff); }
+.bre-fast-model-badge { flex: none; padding: 0 4px; border-radius: 3px; font-size: 11px; line-height: 16px; background: var(--dsw-alias-bg-layer-2); }
+
 /* Optional GPT Fast: an icon-only lightning toggle to the right of the effort
    slider, one slider step wide (--bre-fast-slot is set by the slider). It is
    absent unless the Host confirms the current GPT route supports it, so the
@@ -837,11 +844,13 @@ body:not([data-ds-dark-theme]) .bre-effort.is-dragging .bre-effort-knob {
 .bre-fast-button svg { width: 16px; height: 16px; }
 .bre-fast-button:hover:not(:disabled) { background: var(--dsw-alias-bg-layer-2); }
 .bre-fast-button[data-active=true] {
-  color: var(--dsw-alias-brand-primary);
-  border-color: var(--dsw-alias-brand-primary);
-  background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent);
+  /* The brand-primary token is near-black on Desktop; the slider and effort
+     label use the blue DeepSeek palette instead. Leave the bolt unfilled so
+     its outline is the same bright blue in both themes. */
+  color: var(--dsw-static-deepseek-500, #4d70ff);
+  border-color: currentColor;
+  background: color-mix(in srgb, currentColor 12%, transparent);
 }
-.bre-fast-button[data-active=true] svg { fill: currentColor; }
 .bre-fast-button:disabled { opacity: .55; cursor: progress; }
 .bre-fast-button:focus-visible {
   outline: 2px solid var(--dsw-alias-brand-primary);

@@ -448,7 +448,11 @@ describe('client apply()', () => {
 
       // The footer slot registration happens at apply.
       expect(h.slotCalls.injected).toContain('settings.models.footer')
-      expect(h.slotCalls.registered[0]).toMatchObject({ name: 'settings.models.footer', id: PLUGIN_ID + '-slider-toggle' })
+      expect(h.slotCalls.registered.find(entry => entry['name'] === 'settings.models.footer'))
+        .toMatchObject({ name: 'settings.models.footer', id: PLUGIN_ID + '-slider-toggle' })
+      expect(h.slotCalls.injected).toContain('conversation.input.model.label')
+      expect(h.slotCalls.registered.find(entry => entry['name'] === 'conversation.input.model.label'))
+        .toMatchObject({ id: PLUGIN_ID + '-fast-model-label' })
 
       // The provider-card seat is taken under the adapter family's namespace —
       // the keyed dispatch key that delivers every llm-pi-ai card.
